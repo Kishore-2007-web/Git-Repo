@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vocabulary Flashcards</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/_sdk/data_sdk.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      box-sizing: border-box;
+      font-family: 'Poppins', -apple-system, sans-serif;
+    }
+    
+    .flip-card {
+      perspective: 1000px;
+      cursor: pointer;
+    }
+    
+    .flip-card-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transition: transform 0.5s;
+      transform-style: preserve-3d;
+    }
+    
+    .flip-card.flipped .flip-card-inner {
+      transform: rotateY(180deg);
+    }
+    
+    .flip-card-front, .flip-card-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      border-radius: 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+    
+    .flip-card-back {
+      transform: rotateY(180deg);
+    }
+    
+    .progress-ring {
+      transition: stroke-dashoffset 0.5s ease;
+    }
+  </style>
+</head>
+<body class="h-full">
+  <div id="app" class="w-full h-full overflow-auto"></div>
+
+  <script>
+    const defaultConfig = {
+      background_color: "#0f172a",
+      surface_color: "#1e293b",
+      text_color: "#f1f5f9",
+      primary_action_color: "#3b82f6",
+      secondary_action_color: "#64748b",
+      app_title: "Spanish Greetings",
+      subtitle: "Master Common Phrases",
+      instruction_text: "Click the card to reveal the translation",
+      font_family: "Poppins",
+      font_size: 16
+    };
+
+    const REFERENCE_CARDS = [
+      { id: "card1", front: "Hola", back: "Hello" },
+      { id: "card2", front: "Buenos días", back: "Good morning" },
+      { id: "card3", front: "Buenas tardes", back: "Good afternoon" },
+      { id: "card4", front: "Buenas noches", back: "Good evening/night" },
+      { id: "card5", front: "¿Cómo estás?", back: "How are you?" }
+    ];
+
+    let currentCardIndex = 0;
+    let isFlipped = false;
+    let userProgress = new Map();
+    let studySession = [];
+
+    const dataHandler = {
+      onDataChanged(data) {
+        userProgress.clear();
+        data.forEach(record => {
+          userProgress.set(record.card_id, {
+            times_studied: record.times_studied || 0,
+            times_correct: record.times_correct || 0,
+            last_studied: record.last_studied || null,
+            __backendId: record.__backendId
+          });
+        });
+        renderApp();
+      }
+    };
+
+    async function initializeApp() {
+      const initResult = await window.dataSdk.init(dataHandler);
+      if (!initResult.isOk) {
+        console.error("Failed to initialize data SDK");
+      }
+
+      await window.elementSdk.init({
+        defaultConfig,
+        onConfigChange: async (config) => {
+          renderApp();
+        },
+        mapToCapabilities: (config) => ({
+          recolorables: [
+            {
+              get: () => config.background_color || defaultConfig.background_color,
+              set: (value) => {
+                config.background_color = value;
+                window.elementSdk.setConfig({ background_color: value });
+              }
+            },
+            {
+              get: () => config.surface_color || defaultConfig.surface_color,
+              set: (value) => {
+                config.surface_color = value;
+                window.elementSdk.setConfig({ surface_color: value });
+              }
+            },
+            {
+              get: () => config.text_color || defaultConfig.text_color,
+              set: (value) => {
+                config.text_color = value;
+                window.elementSdk.setConfig({ text_color: value });
+              }
+            },
+            {
+              get: () => config.primary_action_color || defaultConfig.primary_action_color,
+              set: (value) => {
+                config.primary_action_color = value;
+                window.elementSdk.setConfig({ primary_action_color: value });
+              }
+            },
+            {
+              get: () => config.secondary_action_color || defaultConfig.secondary_action_color,
+              set: (value) => {
+                config.secondary_action_color = value;
+                window.elementSdk.setConfig({ secondary_action_color: value });
+              }
+            }
+          ],
+          borderables: [],
+          fontEditable: {
+            get: () => config.font_family || defaultConfig.font_family,
+            set: (value) => {
+              config.font_family = value;
+              window.elementSdk.setConfig({ font_family: value });
+            }
+          },
+          fontSizeable: {
+            get: () => config.font_size || defaultConfig.font_size,
+            set: (value) => {
+              config.font_size = value;
+              window.elementSdk.setConfig({ font_size: value });
+            }
+          }
+        }),
+        mapToEditPanelValues: (config) => new Map([
+          ["app_title", config.app_title || defaultConfig.app_title],
+          ["subtitle", config.subtitle || defaultConfig.subtitle],
+          ["instruction_text", config.instruction_text || defaultConfig.instruction_text]
+        ])
+      });
+
+      renderApp();
+    }
+
+    function renderApp() {
+      const config = window.elementSdk?.config || defaultConfig;
+      const bgColor = config.background_color || defaultConfig.background_color;
+      const surfaceColor = config.surface_color || defaultConfig.surface_color;
+      const textColor = config.text_color || defaultConfig.text_color;
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+      const secondaryColor = config.secondary_action_color || defaultConfig.secondary_action_color;
+      const fontFamily = config.font_family || defaultConfig.font_family;
+      const baseSize = config.font_size || defaultConfig.font_size;
+      const appTitle = config.app_title || defaultConfig.app_title;
+      const subtitle = config.subtitle || defaultConfig.subtitle;
+      const instructionText = config.instruction_text || defaultConfig.instruction_text;
+
+      const currentCard = REFERENCE_CARDS[currentCardIndex];
+      const progress = userProgress.get(currentCard.id) || { times_studied: 0, times_correct: 0 };
+      const masteryPercent = progress.times_studied > 0 
+        ? Math.round((progress.times_correct / progress.times_studied) * 100) 
+        : 0;
+
+      const totalStudied = Array.from(userProgress.values()).reduce((sum, p) => sum + p.times_studied, 0);
+      const totalCorrect = Array.from(userProgress.values()).reduce((sum, p) => sum + p.times_correct, 0);
+      const overallPercent = totalStudied > 0 ? Math.round((totalCorrect / totalStudied) * 100) : 0;
+
+      const circumference = 2 * Math.PI * 45;
+      const progressOffset = circumference - (masteryPercent / 100) * circumference;
+
+      document.getElementById('app').innerHTML = `
+        <div style="background: ${bgColor}; font-family: ${fontFamily}, -apple-system, sans-serif; min-height: 100%; padding: 2rem;">
+          <div style="max-width: 56rem; margin: 0 auto;">
+            
+            <!-- Header -->
+            <div style="text-align: center; margin-bottom: 3rem;">
+              <h1 style="color: ${textColor}; font-size: ${baseSize * 2}px; font-weight: 700; margin-bottom: 0.5rem;">
+                ${appTitle}
+              </h1>
+              <p style="color: ${textColor}; opacity: 0.7; font-size: ${baseSize * 1.125}px;">
+                ${subtitle}
+              </p>
+            </div>
+
+            <!-- Stats Bar -->
+            <div style="background: ${surfaceColor}; border-radius: 1rem; padding: 1.5rem; margin-bottom: 2rem; display: flex; justify-content: space-around; flex-wrap: wrap; gap: 1rem;">
+              <div style="text-align: center;">
+                <div style="color: ${textColor}; opacity: 0.6; font-size: ${baseSize * 0.875}px; margin-bottom: 0.25rem;">
+                  Cards Studied
+                </div>
+                <div style="color: ${primaryColor}; font-size: ${baseSize * 1.5}px; font-weight: 700;">
+                  ${totalStudied}
+                </div>
+              </div>
+              <div style="text-align: center;">
+                <div style="color: ${textColor}; opacity: 0.6; font-size: ${baseSize * 0.875}px; margin-bottom: 0.25rem;">
+                  Accuracy
+                </div>
+                <div style="color: ${primaryColor}; font-size: ${baseSize * 1.5}px; font-weight: 700;">
+                  ${overallPercent}%
+                </div>
+              </div>
+              <div style="text-align: center;">
+                <div style="color: ${textColor}; opacity: 0.6; font-size: ${baseSize * 0.875}px; margin-bottom: 0.25rem;">
+                  Progress
+                </div>
+                <div style="color: ${primaryColor}; font-size: ${baseSize * 1.5}px; font-weight: 700;">
+                  ${currentCardIndex + 1}/${REFERENCE_CARDS.length}
+                </div>
+              </div>
+            </div>
+
+            <!-- Flashcard -->
+            <div style="margin-bottom: 2rem;">
+              <div id="flashcard" class="flip-card ${isFlipped ? 'flipped' : ''}" style="width: 100%; height: 400px;">
+                <div class="flip-card-inner">
+                  <div class="flip-card-front" style="background: ${surfaceColor}; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+                    <div style="position: absolute; top: 1rem; right: 1rem;">
+                      <svg width="100" height="100" style="transform: rotate(-90deg);">
+                        <circle cx="50" cy="50" r="45" stroke="${textColor}" stroke-opacity="0.1" stroke-width="8" fill="none" />
+                        <circle 
+                          cx="50" cy="50" r="45" 
+                          stroke="${primaryColor}" 
+                          stroke-width="8" 
+                          fill="none"
+                          stroke-dasharray="${circumference}"
+                          stroke-dashoffset="${progressOffset}"
+                          class="progress-ring"
+                          stroke-linecap="round"
+                        />
+                        <text x="50" y="50" text-anchor="middle" dy="0.3em" style="font-size: ${baseSize * 0.875}px; font-weight: 600; fill: ${textColor};">
+                          ${masteryPercent}%
+                        </text>
+                      </svg>
+                    </div>
+                    <div style="color: ${textColor}; opacity: 0.5; font-size: ${baseSize * 0.875}px; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em;">
+                      Spanish
+                    </div>
+                    <div style="color: ${textColor}; font-size: ${baseSize * 2.5}px; font-weight: 700; text-align: center;">
+                      ${currentCard.front}
+                    </div>
+                    <div style="color: ${textColor}; opacity: 0.4; font-size: ${baseSize * 0.875}px; margin-top: 2rem;">
+                      ${instructionText}
+                    </div>
+                  </div>
+                  <div class="flip-card-back" style="background: ${primaryColor}; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+                    <div style="color: white; opacity: 0.8; font-size: ${baseSize * 0.875}px; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em;">
+                      English
+                    </div>
+                    <div style="color: white; font-size: ${baseSize * 2.5}px; font-weight: 700; text-align: center;">
+                      ${currentCard.back}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div style="display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap;">
+              <button id="knowBtn" style="flex: 1; min-width: 140px; background: ${primaryColor}; color: white; border: none; border-radius: 0.75rem; padding: 1rem 1.5rem; font-size: ${baseSize}px; font-weight: 600; cursor: pointer; transition: all 0.2s;" ${!isFlipped ? 'disabled' : ''}>
+                ✓ I Know This
+              </button>
+              <button id="dontKnowBtn" style="flex: 1; min-width: 140px; background: ${secondaryColor}; color: white; border: none; border-radius: 0.75rem; padding: 1rem 1.5rem; font-size: ${baseSize}px; font-weight: 600; cursor: pointer; transition: all 0.2s;" ${!isFlipped ? 'disabled' : ''}>
+                ✗ Still Learning
+              </button>
+            </div>
+
+            <!-- Navigation -->
+            <div style="display: flex; gap: 1rem; justify-content: center;">
+              <button id="prevBtn" style="background: ${surfaceColor}; color: ${textColor}; border: none; border-radius: 0.75rem; padding: 0.75rem 1.5rem; font-size: ${baseSize}px; font-weight: 600; cursor: pointer; transition: all 0.2s;" ${currentCardIndex === 0 ? 'disabled' : ''}>
+                ← Previous
+              </button>
+              <button id="nextBtn" style="background: ${surfaceColor}; color: ${textColor}; border: none; border-radius: 0.75rem; padding: 0.75rem 1.5rem; font-size: ${baseSize}px; font-weight: 600; cursor: pointer; transition: all 0.2s;" ${currentCardIndex === REFERENCE_CARDS.length - 1 ? 'disabled' : ''}>
+                Next →
+              </button>
+            </div>
+
+          </div>
+        </div>
+      `;
+
+      // Event Listeners
+      const flashcard = document.getElementById('flashcard');
+      flashcard.onclick = () => {
+        isFlipped = !isFlipped;
+        renderApp();
+      };
+
+      const knowBtn = document.getElementById('knowBtn');
+      const dontKnowBtn = document.getElementById('dontKnowBtn');
+      
+      knowBtn.onclick = async (e) => {
+        e.stopPropagation();
+        if (!isFlipped) return;
+        knowBtn.disabled = true;
+        dontKnowBtn.disabled = true;
+        await recordAnswer(true);
+      };
+
+      dontKnowBtn.onclick = async (e) => {
+        e.stopPropagation();
+        if (!isFlipped) return;
+        knowBtn.disabled = true;
+        dontKnowBtn.disabled = true;
+        await recordAnswer(false);
+      };
+
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      
+      prevBtn.onclick = () => {
+        if (currentCardIndex > 0) {
+          currentCardIndex--;
+          isFlipped = false;
+          renderApp();
+        }
+      };
+
+      nextBtn.onclick = () => {
+        if (currentCardIndex < REFERENCE_CARDS.length - 1) {
+          currentCardIndex++;
+          isFlipped = false;
+          renderApp();
+        }
+      };
+
+      // Style disabled buttons
+      if (!isFlipped) {
+        knowBtn.style.opacity = '0.5';
+        knowBtn.style.cursor = 'not-allowed';
+        dontKnowBtn.style.opacity = '0.5';
+        dontKnowBtn.style.cursor = 'not-allowed';
+      }
+
+      if (currentCardIndex === 0) {
+        prevBtn.style.opacity = '0.5';
+        prevBtn.style.cursor = 'not-allowed';
+      }
+
+      if (currentCardIndex === REFERENCE_CARDS.length - 1) {
+        nextBtn.style.opacity = '0.5';
+        nextBtn.style.cursor = 'not-allowed';
+      }
+    }
+
+    async function recordAnswer(isCorrect) {
+      const currentCard = REFERENCE_CARDS[currentCardIndex];
+      const existingProgress = userProgress.get(currentCard.id);
+
+      if (existingProgress && existingProgress.__backendId) {
+        const updatedRecord = {
+          __backendId: existingProgress.__backendId,
+          card_id: currentCard.id,
+          times_studied: existingProgress.times_studied + 1,
+          times_correct: existingProgress.times_correct + (isCorrect ? 1 : 0),
+          last_studied: new Date().toISOString()
+        };
+
+        const result = await window.dataSdk.update(updatedRecord);
+        if (!result.isOk) {
+          console.error("Failed to update progress");
+        }
+      } else {
+        const newRecord = {
+          card_id: currentCard.id,
+          times_studied: 1,
+          times_correct: isCorrect ? 1 : 0,
+          last_studied: new Date().toISOString()
+        };
+
+        const result = await window.dataSdk.create(newRecord);
+        if (!result.isOk) {
+          console.error("Failed to create progress record");
+        }
+      }
+
+      if (currentCardIndex < REFERENCE_CARDS.length - 1) {
+        currentCardIndex++;
+      }
+      isFlipped = false;
+    }
+
+    initializeApp();
+  </script>
+</body>
+</html>
