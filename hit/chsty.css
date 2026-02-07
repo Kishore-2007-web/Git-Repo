@@ -17,6 +17,15 @@ pre{
     font-size: 20px;
     top:1060px
 }
+.bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -1;
+}
 
 .hr1{
     border: 1px solid #FFFFFF;
@@ -33,6 +42,12 @@ pre{
     border: 1px solid #FFFFFF;
     position: absolute;
     top:1200px;
+    width: 100%;
+}
+.hr4{
+    border: 1px solid #FFFFFF;
+    position: absolute;
+    top:1300px;
     width: 100%;
 }
 
@@ -95,6 +110,14 @@ pre{
 .div{
     height: 500px;
     width: 500px;
+}
+.hit{
+    height: 900px;
+    width: 700px;
+    
+    position: absolute;
+    top: 130px;
+    left: 500px;
 }
 
 @keyframes rotateImg {
